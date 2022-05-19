@@ -23,26 +23,12 @@ static k: [u64; 64] =
     0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
     0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c,
     0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
-    0x289b7ec6, 0xea127fa, 0xd4ef3085, 0x04881d05,
+    0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05,
     0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
     0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039,
     0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
     0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
     0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391];
-
-/*
-static mut k: [u64; 64] = [0; 64];
-
-fn init_k() {
-    let mut i: usize = 0;
-    unsafe {
-        while i < 64 {
-            k[i] = (((i as f64) + 1f64).sin().abs().floor() * 2f64.powi(32)) as u64;
-            i += 1;
-        }
-    }
-}
-*/
 
 fn f_fun(x: u64, y: u64, z: u64) -> u64 {
     (x & y) | ( ((!x) & 0xffffffff) & z)
@@ -61,7 +47,7 @@ fn i_fun(x: u64, y: u64, z: u64) -> u64 {
 }
 
 fn leftrotate (x: u64, c: u64) -> u64 {
-    (x << c) | (x >> (32 - c))
+    ((x & 0xffffffff) << c) | ((x & 0xffffffff) >> (32 - c))
 }
 
 fn cal_block(buf: &mut [u8], h0: &mut u64, h1: &mut u64, 
@@ -78,7 +64,7 @@ fn cal_block(buf: &mut [u8], h0: &mut u64, h1: &mut u64,
             buf[idx] = 0;
             idx += 1;
         }
-        let len_bytes = total_len.to_le_bytes();
+        let len_bytes = (total_len * 8).to_le_bytes();
         while idx < 64 {
             buf[idx] = len_bytes[idx - 56];
             idx += 1;
@@ -95,11 +81,11 @@ fn cal_block(buf: &mut [u8], h0: &mut u64, h1: &mut u64,
 
     let mut w: [u64; 16] = [0; 16];
     for i in 0..16 {
-        let temp: [u8; 8] = [0, 0, 0, 0, buf[i * 4], 
-                            buf[i * 4 + 1], buf[i * 4 + 2],
-                            buf[i * 4 + 3]];
-        w[i] = u64::from_le_bytes(temp);
+        let temp: [u8; 4] = [buf[i * 4], buf[i * 4 + 1], 
+                            buf[i * 4 + 2], buf[i * 4 + 3]];
+        w[i] = u32::from_le_bytes(temp) as u64;
     }
+    
 
     for i in 0..64 {
         let x: u64 = if i < 16 {
@@ -114,7 +100,7 @@ fn cal_block(buf: &mut [u8], h0: &mut u64, h1: &mut u64,
         else {
             leftrotate(a + i_fun(b, c, d) + k[i] + w[(7 * i) % 16], r[i])
         };
-
+        
         let temp = d;
         d = c;
         c = b;
@@ -129,7 +115,7 @@ fn cal_block(buf: &mut [u8], h0: &mut u64, h1: &mut u64,
 
     if len == 56 {
         let mut buf2: [u8; 64] = [0; 64];
-        let len_bytes = total_len.to_le_bytes();
+        let len_bytes = (total_len * 8).to_le_bytes();
         let mut idx = 56;
         while idx < 64 {
             buf[idx] = len_bytes[idx - 56];
@@ -140,8 +126,6 @@ fn cal_block(buf: &mut [u8], h0: &mut u64, h1: &mut u64,
 }
 
 fn main() {
-    // init_k();
-
     let args: Vec<String> = env::args().collect();
 
     let args_len = args.len();
@@ -173,7 +157,6 @@ fn main() {
             let mut buf: [u8; 64] = [0; 64];
             match reader.read(&mut buf) {
                 Ok(len) => {
-                    // println!("{}", str::from_utf8(&buf).unwrap());
                     total_len += len;
 
                     cal_block(&mut buf, &mut h0, &mut h1, 
@@ -189,10 +172,10 @@ fn main() {
             }
         }
 
-        let h0_bytes = h0.to_le_bytes();
-        let h1_bytes = h1.to_le_bytes();
-        let h2_bytes = h2.to_le_bytes();
-        let h3_bytes = h3.to_le_bytes();
+        let h0_bytes = (h0 as u32).to_le_bytes();
+        let h1_bytes = (h1 as u32).to_le_bytes();
+        let h2_bytes = (h2 as u32).to_le_bytes();
+        let h3_bytes = (h3 as u32).to_le_bytes();
 
         println!("{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}\
             {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}  {}",
